@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Звездные Войны: Игра X-Wing</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-image: url('https://images.unsplash.com/photo-1534447677768-be436bb09401?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80');
+            background-size: cover;
+        }
+        
+        .game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            border: 2px solid #ffd700;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 0 20px #ffd700;
+        }
+        
+        #gameCanvas {
+            background: linear-gradient(to bottom, #000011, #000033);
+        }
+        
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            width: 800px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #ffd700;
+            border-radius: 5px;
+        }
+        
+        .controls {
+            margin-top: 10px;
+            text-align: center;
+        }
+        
+        button {
+            background: #ffd700;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: #ffed4e;
+            transform: scale(1.05);
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        
+        h1 {
+            color: #ffd700;
+            text-shadow: 0 0 10px #ffd700;
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+        
+        h2 {
+            color: #fff;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>ЗВЕЗДНЫЕ ВОЙНЫ: БИТВА X-WING</h1>
+    
+    <div class="info-panel">
+        <div>Очки: <span id="score">0</span></div>
+        <div>Здоровье: <span id="health">100</span></div>
+        <div>Уровень: <span id="level">1</span></div>
+    </div>
+    
+    <div class="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="startScreen" class="game-over">
+            <h2>БИТВА X-WING</h2>
+            <p>Уничтожай TIE Истребители и сражайся против Империи!</p>
+            <p>Управление: ← → (Движение) и SPACE (Огонь)</p>
+            <button id="startButton">НАЧАТЬ ИГРУ</button>
+        </div>
+        
+        <div id="gameOverScreen" class="game-over" style="display: none;">
+            <h2>ИГРА ОКОНЧЕНА</h2>
+            <p>Ваши очки: <span id="finalScore">0</span></p>
+            <button id="restartButton">ИГРАТЬ СНОВА</button>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <p>Используйте ← → для движения, SPACE для стрельбы</p>
+    </div>
+
+    <script>
+        // Игровые переменные
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const startButton = document.getElementById('startButton');
+        const restartButton = document.getElementById('restartButton');
+        const scoreElement = document.getElementById('score');
+        const healthElement = document.getElementById('health');
+        const levelElement = document.getElementById('level');
+        const finalScoreElement = document.getElementById('finalScore');
+        
+        let gameActive = false;
+        let score = 0;
+        let health = 100;
+        let level = 1;
+        let enemies = [];
+        let lasers = [];
+        let enemyLasers = [];
+        let stars = [];
+        
+        // Корабль игрока
+        const player = {
+            x: canvas.width / 2 - 25,
+            y: canvas.height - 80,
+            width: 50,
+            height: 70,
+            speed: 8,
+            color: '#3498db'
+        };
+        
+        // Создание звезд
+        function createStars() {
+            stars = [];
+            for (let i = 0; i < 100; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2 + 1,
+                    speed: Math.random() * 3 + 1
+                });
+            }
+        }
+        
+        // Отрисовка звезд
+        function drawStars() {
+            ctx.fillStyle = '#ffffff';
+            for (let star of stars) {
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        
+        // Обновление звезд
+        function updateStars() {
+            for (let star of stars) {
+                star.y += star.speed;
+                if (star.y > canvas.height) {
+                    star.y = 0;
+                    star.x = Math.random() * canvas.width;
+                }
+            }
+        }
+        
+        // Отрисовка игрока
+        function drawPlayer() {
+            // Корпус X-Wing
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            
+            // Крылья
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(player.x - 15, player.y + 10, 15, 20);
+            ctx.fillRect(player.x + player.width, player.y + 10, 15, 20);
+            
+            // Двигатели
+            ctx.fillStyle = '#ff6b6b';
+            ctx.fillRect(player.x + 10, player.y + player.height, 10, 15);
+            ctx.fillRect(player.x + player.width - 20, player.y + player.height, 10, 15);
+        }
+        
+        // Создание врага
+        function createEnemy() {
+            const enemy = {
+                x: Math.random() * (canvas.width - 40),
+                y: -40,
+                width: 40,
+                height: 40,
+                speed: 2 + level * 0.2,
+                color: '#e74c3c'
+            };
+            enemies.push(enemy);
+        }
+        
+        // Отрисовка врагов
+        function drawEnemies() {
+            for (let enemy of enemies) {
+                // Корпус TIE Fighter
+                ctx.fillStyle = enemy.color;
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                
+                // Крылья
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(enemy.x - 10, enemy.y + 5, 10, 30);
+                ctx.fillRect(enemy.x + enemy.width, enemy.y + 5, 10, 30);
+            }
+        }
+        
+        // Обновление врагов
+        function updateEnemies() {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                enemies[i].y += enemies[i].speed;
+                
+                // Враг вышел за пределы экрана
+                if (enemies[i].y > canvas.height) {
+                    enemies.splice(i, 1);
+                    health -= 10;
+                    updateHealth();
+                }
+            }
+            
+            // Случайное создание врагов
+            if (Math.random() < 0.02 + level * 0.005) {
+                createEnemy();
+            }
+        }
+        
+        // Выстрел лазером
+        function shootLaser() {
+            const laser = {
+                x: player.x + player.width / 2 - 2,
+                y: player.y,
+                width: 4,
+                height: 20,
+                speed: 10,
+                color: '#00ff00'
+            };
+            lasers.push(laser);
+        }
+        
+        // Выстрел врага
+        function enemyShoot(enemy) {
+            const laser = {
+                x: enemy.x + enemy.width / 2 - 2,
+                y: enemy.y + enemy.height,
+                width: 4,
+                height: 20,
+                speed: 5,
+                color: '#ff0000'
+            };
+            enemyLasers.push(laser);
+        }
+        
+        // Отрисовка лазеров
+        function drawLasers() {
+            for (let laser of lasers) {
+                ctx.fillStyle = laser.color;
+                ctx.fillRect(laser.x, laser.y, laser.width, laser.height);
+            }
+            
+            for (let laser of enemyLasers) {
+                ctx.fillStyle = laser.color;
+                ctx.fillRect(laser.x, laser.y, laser.width, laser.height);
+            }
+        }
+        
+        // Обновление лазеров
+        function updateLasers() {
+            // Лазеры игрока
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                lasers[i].y -= lasers[i].speed;
+                
+                // Лазер вышел за пределы экрана
+                if (lasers[i].y < 0) {
+                    lasers.splice(i, 1);
+                    continue;
+                }
+                
+                // Проверка столкновений
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    if (checkCollision(lasers[i], enemies[j])) {
+                        // Столкновение произошло
+                        enemies.splice(j, 1);
+                        lasers.splice(i, 1);
+                        score += 10;
+                        updateScore();
+                        break;
+                    }
+                }
+            }
+            
+            // Лазеры врагов
+            for (let i = enemyLasers.length - 1; i >= 0; i--) {
+                enemyLasers[i].y += enemyLasers[i].speed;
+                
+                // Лазер вышел за пределы экрана
+                if (enemyLasers[i].y > canvas.height) {
+                    enemyLasers.splice(i, 1);
+                    continue;
+                }
+                
+                // Проверка попадания в игрока
+                if (checkCollision(enemyLasers[i], player)) {
+                    enemyLasers.splice(i, 1);
+                    health -= 5;
+                    updateHealth();
+                }
+            }
+            
+            // Случайная стрельба врагов
+            for (let enemy of enemies) {
+                if (Math.random() < 0.005) {
+                    enemyShoot(enemy);
+                }
+            }
+        }
+        
+        // Проверка столкновений
+        function checkCollision(obj1, obj2) {
+            return obj1.x < obj2.x + obj2.width &&
+                   obj1.x + obj1.width > obj2.x &&
+                   obj1.y < obj2.y + obj2.height &&
+                   obj1.y + obj1.height > obj2.y;
+        }
+        
+        // Обновление счета
+        function updateScore() {
+            scoreElement.textContent = score;
+            
+            // Повышение уровня каждые 100 очков
+            const newLevel = Math.floor(score / 100) + 1;
+            if (newLevel > level) {
+                level = newLevel;
+                levelElement.textContent = level;
+            }
+        }
+        
+        // Обновление здоровья
+        function updateHealth() {
+            healthElement.textContent = health;
+            
+            if (health <= 0) {
+                endGame();
+            }
+        }
+        
+        // Начало игры
+        function startGame() {
+            gameActive = true;
+            score = 0;
+            health = 100;
+            level = 1;
+            enemies = [];
+            lasers = [];
+            enemyLasers = [];
+            
+            updateScore();
+            updateHealth();
+            
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            
+            // Запуск игрового цикла
+            gameLoop();
+        }
+        
+        // Конец игры
+        function endGame() {
+            gameActive = false;
+            finalScoreElement.textContent = score;
+            gameOverScreen.style.display = 'flex';
+        }
+        
+        // Игровой цикл
+        function gameLoop() {
+            if (!gameActive) return;
+            
+            // Очистка экрана
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Обновление и отрисовка звезд
+            updateStars();
+            drawStars();
+            
+            // Обновление и отрисовка игровых объектов
+            drawPlayer();
+            drawEnemies();
+            updateEnemies();
+            drawLasers();
+            updateLasers();
+            
+            // Следующий кадр
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Управление клавиатурой
+        const keys = {};
+        
+        window.addEventListener('keydown', function(e) {
+            keys[e.key] = true;
+            
+            // Стрельба пробелом
+            if (e.key === ' ' && gameActive) {
+                shootLaser();
+            }
+        });
+        
+        window.addEventListener('keyup', function(e) {
+            keys[e.key] = false;
+        });
+        
+        // Движение игрока
+        function handlePlayerMovement() {
+            if (keys['ArrowLeft'] && player.x > 0) {
+                player.x -= player.speed;
+            }
+            if (keys['ArrowRight'] && player.x + player.width < canvas.width) {
+                player.x += player.speed;
+            }
+        }
+        
+        // Постоянная проверка движения
+        setInterval(handlePlayerMovement, 10);
+        
+        // Обработчики событий
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+        
+        // Создание звезд
+        createStars();
+    </script>
+</body>
+</html>
